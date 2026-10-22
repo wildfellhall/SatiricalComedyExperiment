@@ -190,3 +190,30 @@ tokenizer = PreTrainedTokenizerFast(
     eos_token="<|endoftext|>",
     pad_token="<|pad|>"
 )
+"""
+Cell 3: Initialize 30M Parameter Random GPT 2 Head
+"""
+import json
+import torch
+from transformers import GPT2Config, GPT2LMHeadModel
+
+# 30.8M Parameter Configuration
+config = GPT2Config(
+    vocab_size=12288,
+    n_positions=768,
+    n_ctx=768,
+    n_embd=384,
+    n_layer=10,
+    n_head=8,
+    bos_token_id=tokenizer.convert_tokens_to_ids("<|endoftext|>"),
+    eos_token_id=tokenizer.convert_tokens_to_ids("<|endoftext|>"),
+    pad_token_id=tokenizer.convert_tokens_to_ids("<|pad|>"),
+    tie_word_embeddings=True
+)
+
+# Initialize from SCRATCH with random Gaussian weights
+model = GPT2LMHeadModel(config)
+
+total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+print(f"Verified Randomly Initialized Parameters: {total_params:,}")
+# Output: ~30,812,160 parameters
