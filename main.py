@@ -309,3 +309,29 @@ trainer.train()
 # Save locally after training finishes
 model.save_pretrained("./satire_gpt2_30m_final")
 tokenizer.save_pretrained("./satire_gpt2_30m_final")
+
+"""
+Testing/Prompting Cell
+"""
+def continue_prompt(prompt_text, max_new_tokens=150):
+    inputs = tokenizer(prompt_text, return_tensors="pt").to(model.device)
+    
+    outputs = model.generate(
+        **inputs,
+        max_new_tokens=max_new_tokens,
+        temperature=0.75,
+        top_p=0.88,
+        top_k=40,
+        repetition_penalty=1.2,
+        no_repeat_ngram_size=3,
+        do_sample=True,
+        pad_token_id=tokenizer.pad_token_id
+    )
+    
+    continuation = tokenizer.decode(outputs[0], skip_special_tokens=True)
+    print("=== PROMPT CONTINUATION ===")
+    print(continuation)
+
+# Example Continuation Prompt
+test_prompt = "It is a truth universally acknowledged, that a young politician in possession of a good fortune,"
+continue_prompt(test_prompt)
