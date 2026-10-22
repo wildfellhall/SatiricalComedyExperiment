@@ -160,3 +160,33 @@ print(f"Successfully processed {len(cleaned_texts)} works.")
 # Save raw merged text for Tokenizer training
 with open("sanitized_satire_corpus.txt", "w", encoding="utf-8") as f:
     f.write("\n\n<|endoftext|>\n\n".join(cleaned_texts))
+
+"""
+Cell 2: Train custom tokenizer
+"""
+import os
+from tokenizers import ByteLevelBPETokenizer
+from transformers import PreTrainedTokenizerFast
+
+# Train a 12,288 vocab tokenizer (Saves embedding parameters)
+special_tokens = ["<|endoftext|>", "<|pad|>"]
+
+bpe_tokenizer = ByteLevelBPETokenizer()
+bpe_tokenizer.train(
+    files=["sanitized_satire_corpus.txt"],
+    vocab_size=12288,
+    min_frequency=2,
+    special_tokens=special_tokens
+)
+
+os.makedirs("satire_tokenizer", exist_ok=True)
+bpe_tokenizer.save_model("satire_tokenizer")
+
+tokenizer = PreTrainedTokenizerFast(
+    tokenizer_file="satire_tokenizer/vocab.json",
+    vocab_file="satire_tokenizer/vocab.json",
+    merges_file="satire_tokenizer/merges.txt",
+    bos_token="<|endoftext|>",
+    eos_token="<|endoftext|>",
+    pad_token="<|pad|>"
+)
