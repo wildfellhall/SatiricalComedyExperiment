@@ -217,3 +217,95 @@ model = GPT2LMHeadModel(config)
 total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
 print(f"Verified Randomly Initialized Parameters: {total_params:,}")
 # Output: ~30,812,160 parameters
+
+"""
+Cell 4: Chunking
+"""
+import torch
+from transformers import DataCollatorForLanguageModeling, Trainer, TrainingArguments, TrainerCallback
+
+# Pack text into overlapping 768-token sequences
+def chunk_text(texts, block_size=768, stride=384):
+    all_input_ids = []
+    for text in texts:
+        tokens = tokenizer.encode(text)
+        for i in range(0, len(tokens), stride):
+            chunk = tokens[i:i + block_size]
+            if len(chunk) == block_size:
+                all_input_ids.append(chunk)
+    return Dataset.from_dict({"input_ids": all_input_ids})
+
+dataset = chunk_text(cleaned_texts, block_size=768, stride=384)
+
+data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
+
+class SatireSampleCallback(TrainerCallback):
+    def __init__(self, tokenizer, sample_prompt="It is a truth universally acknowledged, that a young politician", steps=100):
+        self.tokenizer = tokenizer
+        self.sample_prompt = sample_prompt
+        self.steps = steps
+        self._last_logged_step = -1
+
+    def on_step_end(self, args, state, control, model=None, **kwargs):
+        if state.global_step > 0 and state.global_step % self.steps == 0 and state.global_step != self._last_logged_step:
+            self._last_logged_step = state.global_step
+
+            print(f"\n" + "=" * 18 + f" SAMPLE GENERATION (STEP {state.global_step}) " + "=" * 18)
+            model.eval()
+            inputs = self.tokenizer(self.sample_prompt, return_tensors="pt").to(model.device)
+            
+            with torch.no_grad():
+                outputs = model.generate(
+                    **inputs,
+                    max_new_tokens=80,
+                    temperature=0.75,
+                    top_p=0.88,
+                    top_k=40,
+                    repetition_penalty=1.2,
+                    do_sample=True,
+                    pad_token_id=self.tokenizer.pad_token_id
+                )
+            
+            sample_text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+            print(sample_text)
+            print("=" * 63 + "\n")
+            model.train()
+
+# Instantiate Callback
+satire_callback = SatireSampleCallback(
+    tokenizer=tokenizer,
+    sample_prompt="It is a truth universally acknowledged, that a young politician",
+    steps=100
+)
+
+# Trainer Configuration with 100-step Check-ins
+training_args = TrainingArguments(
+    output_dir="./satire_gpt2_30m",
+    overwrite_output_dir=True,
+    num_train_epochs=15,
+    per_device_train_batch_size=8,
+    gradient_accumulation_steps=4,
+    learning_rate=5e-4,
+    weight_decay=0.01,
+    warmup_ratio=0.03,
+    lr_scheduler_type="cosine",
+    logging_steps=50,
+    save_strategy="epoch",
+    fp16=torch.cuda.is_available(),
+    report_to="none"
+)
+
+trainer = Trainer(
+    model=model,
+    args=training_args,
+    data_collator=DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False),
+    train_dataset=dataset,
+    callbacks=[satire_callback]
+)
+
+# Train the Model
+trainer.train()
+
+# Save locally after training finishes
+model.save_pretrained("./satire_gpt2_30m_final")
+tokenizer.save_pretrained("./satire_gpt2_30m_final")
